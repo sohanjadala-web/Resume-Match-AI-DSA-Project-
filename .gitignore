@@ -9,6 +9,11 @@ dist/
 */dist/
 build/
 */build/
+bin/
+*/bin/
+target/
+*/target/
+*.class
 
 # Environment files
 .env

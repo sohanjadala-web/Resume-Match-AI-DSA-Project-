@@ -4,6 +4,9 @@
   "description": "ResumeMatch AI - DSA-Powered Recruitment Platform",
   "scripts": {
     "server": "npm --prefix server run dev",
+    "server:java": "cd server-java && java -cp bin com.resumematch.Main --server",
+    "cli:java": "cd server-java && java -cp bin com.resumematch.Main",
+    "compile:java": "cd server-java && javac -d bin -encoding UTF-8 src/main/java/com/resumematch/algorithms/*.java src/main/java/com/resumematch/data/*.java src/main/java/com/resumematch/cli/*.java src/main/java/com/resumematch/server/*.java src/main/java/com/resumematch/Main.java",
     "client": "npm --prefix client run dev",
     "seed": "npm --prefix server run db:seed",
     "test": "npm --prefix server test",
