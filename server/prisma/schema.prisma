@@ -1,0 +1,501 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// -------------------------------------------------------------
+// USER & AUTHENTICATION
+// -------------------------------------------------------------
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String
+  role          String    // "CANDIDATE" | "RECRUITER" | "ADMIN"
+  fullName      String
+  phone         String?
+  avatarUrl     String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relationships
+  candidateProfile CandidateProfile?
+  recruiterProfile RecruiterProfile?
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+
+  @@map("users")
+}
+
+// -------------------------------------------------------------
+// CANDIDATE PROFILE & DETAILS
+// -------------------------------------------------------------
+model CandidateProfile {
+  id                String    @id @default(uuid())
+  userId            String    @unique
+  headline          String?
+  careerObjective   String?
+  preferredDomain   String?   // "Software Engineering", "AI/ML", "Data Science", "Cybersecurity", "UI/UX"
+  yearsOfExperience Float     @default(0.0)
+  location          String?
+  preferredWorkMode String?   // "Remote", "Hybrid", "On-site"
+  employmentType    String?   // "Full-time", "Contract", "Internship"
+  expectedSalaryMin Int?
+  expectedSalaryMax Int?
+  availabilityNotice String?  // "Immediate", "15 Days", "1 Month"
+  portfolioUrl      String?
+  githubUrl         String?
+  linkedinUrl       String?
+  profileCompletedPercent Int @default(20)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skills            CandidateSkill[]
+  experience        CandidateExperience[]
+  education         CandidateEducation[]
+  projects          CandidateProject[]
+  certifications    CandidateCertification[]
+  resumes           Resume[]
+  applications      Application[]
+  savedJobs         SavedJob[]
+
+  @@map("candidate_profiles")
+}
+
+// -------------------------------------------------------------
+// RECRUITER & COMPANY PROFILE
+// -------------------------------------------------------------
+model Company {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  logoUrl     String?
+  industry    String?
+  description String?
+  location    String?
+  website     String?
+  isVerified  Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  recruiterProfiles RecruiterProfile[]
+  jobs              Job[]
+
+  @@map("companies")
+}
+
+model RecruiterProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  companyId   String?
+  title       String?  // e.g., "Senior Technical Recruiter"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company     Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  jobs        Job[]
+  notes       RecruiterNote[]
+  assignmentRuns AssignmentRun[]
+  teamProjects   TeamProject[]
+
+  @@map("recruiter_profiles")
+}
+
+// -------------------------------------------------------------
+// SKILLS & SYNONYMS (DSA Aho-Corasick & Normalization Dictionary)
+// -------------------------------------------------------------
+model Skill {
+  id          String       @id @default(uuid())
+  name        String       @unique // Canonical name e.g. "JavaScript", "React", "PostgreSQL"
+  category    String       // "Frontend", "Backend", "AI/ML", "DevOps", "Database", "Security", "Soft Skills"
+  createdAt   DateTime     @default(now())
+
+  aliases     SkillAlias[]
+  candidateSkills CandidateSkill[]
+  jobRequired JobRequiredSkill[]
+  jobPreferred JobPreferredSkill[]
+  projectRequired TeamProjectRequiredSkill[]
+
+  @@map("skills")
+}
+
+model SkillAlias {
+  id        String   @id @default(uuid())
+  skillId   String
+  alias     String   @unique // e.g. "js", "react.js", "reactjs", "postgres"
+  createdAt DateTime @default(now())
+
+  skill     Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@map("skill_aliases")
+}
+
+model CandidateSkill {
+  id                 String           @id @default(uuid())
+  candidateProfileId String
+  skillId            String
+  proficiencyLevel   String           // "Beginner", "Intermediate", "Advanced", "Expert"
+  yearsOfExperience  Float            @default(1.0)
+  isVerifiedByResume Boolean          @default(false)
+
+  candidateProfile   CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  skill              Skill            @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateProfileId, skillId])
+  @@map("candidate_skills")
+}
+
+model CandidateExperience {
+  id                 String           @id @default(uuid())
+  candidateProfileId String
+  jobTitle           String
+  companyName        String
+  location           String?
+  startDate          DateTime
+  endDate            DateTime?
+  isCurrent          Boolean          @default(false)
+  description        String?
+  technologiesUsed   String?          // comma-separated or JSON
+
+  candidateProfile   CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+
+  @@map("candidate_experience")
+}
+
+model CandidateEducation {
+  id                 String           @id @default(uuid())
+  candidateProfileId String
+  institution        String
+  degree             String           // e.g. "B.Tech in Computer Science"
+  fieldOfStudy       String?
+  startYear          Int
+  endYear            Int?
+  grade              String?
+
+  candidateProfile   CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+
+  @@map("candidate_education")
+}
+
+model CandidateProject {
+  id                 String           @id @default(uuid())
+  candidateProfileId String
+  title              String
+  description        String
+  technologies       String           // comma-separated
+  projectUrl         String?
+  githubUrl          String?
+
+  candidateProfile   CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+
+  @@map("candidate_projects")
+}
+
+model CandidateCertification {
+  id                 String           @id @default(uuid())
+  candidateProfileId String
+  name               String
+  issuingOrg         String
+  issueDate          DateTime
+  credentialUrl      String?
+
+  candidateProfile   CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+
+  @@map("certifications")
+}
+
+model Resume {
+  id                 String           @id @default(uuid())
+  candidateProfileId String
+  fileName           String
+  fileSize           Int
+  mimeType           String
+  extractedRawText   String
+  parsedDataJson     String           // Extracted skills, education, experience in JSON
+  createdAt          DateTime         @default(now())
+
+  candidateProfile   CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+
+  @@map("resumes")
+}
+
+// -------------------------------------------------------------
+// JOBS & REQUIREMENTS
+// -------------------------------------------------------------
+model Job {
+  id                 String             @id @default(uuid())
+  recruiterProfileId String
+  companyId          String
+  title              String
+  domain             String             // "Software Engineering", "AI/ML", "Data Science", "Cybersecurity", "UI/UX"
+  description        String
+  openings           Int                @default(1)
+  location           String
+  workMode           String             // "Remote", "Hybrid", "On-site"
+  employmentType     String             // "Full-time", "Contract", "Internship"
+  minExperienceYears Float              @default(0.0)
+  maxExperienceYears Float?
+  salaryMin          Int?
+  salaryMax          Int?
+  status             String             @default("ACTIVE") // "ACTIVE", "PAUSED", "CLOSED", "ARCHIVED"
+  deadline           DateTime?
+  educationRequired  String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  recruiterProfile   RecruiterProfile   @relation(fields: [recruiterProfileId], references: [id], onDelete: Cascade)
+  company            Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  requiredSkills     JobRequiredSkill[]
+  preferredSkills    JobPreferredSkill[]
+  applications       Application[]
+  savedJobs          SavedJob[]
+  assignmentResults  AssignmentResult[]
+
+  @@map("jobs")
+}
+
+model JobRequiredSkill {
+  id          String   @id @default(uuid())
+  jobId       String
+  skillId     String
+  minExpYears Float    @default(1.0)
+
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, skillId])
+  @@map("job_required_skills")
+}
+
+model JobPreferredSkill {
+  id          String   @id @default(uuid())
+  jobId       String
+  skillId     String
+
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, skillId])
+  @@map("job_preferred_skills")
+}
+
+model SavedJob {
+  id                 String           @id @default(uuid())
+  candidateProfileId String
+  jobId              String
+  createdAt          DateTime         @default(now())
+
+  candidateProfile   CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  job                Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateProfileId, jobId])
+  @@map("saved_jobs")
+}
+
+// -------------------------------------------------------------
+// APPLICATIONS & HIRING PIPELINE
+// -------------------------------------------------------------
+model Application {
+  id                 String           @id @default(uuid())
+  candidateProfileId String
+  jobId              String
+  status             String           @default("APPLIED") 
+  // "APPLIED" | "UNDER_REVIEW" | "SHORTLISTED" | "INTERVIEW_SCHEDULED" | "SELECTED" | "REJECTED" | "WITHDRAWN"
+  compatibilityScore Float            @default(0.0) // 0 - 100
+  scoreBreakdownJson String?          // Breakdown details
+  coverLetter        String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  candidateProfile   CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  job                Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  statusHistory      ApplicationStatusHistory[]
+  interviews         Interview[]
+  notes              RecruiterNote[]
+
+  @@unique([candidateProfileId, jobId]) // Prevent duplicate applications
+  @@map("applications")
+}
+
+model ApplicationStatusHistory {
+  id            String      @id @default(uuid())
+  applicationId String
+  fromStatus    String
+  toStatus      String
+  changedByRole String      // "RECRUITER", "CANDIDATE", "ADMIN"
+  changedByUserId String?
+  comment       String?
+  timestamp     DateTime    @default(now())
+
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("application_status_history")
+}
+
+model Interview {
+  id            String      @id @default(uuid())
+  applicationId String
+  title         String      // e.g. "Technical Round 1", "System Design Interview"
+  scheduledAt   DateTime
+  durationMins  Int         @default(45)
+  meetingLink   String?
+  interviewType String      // "Technical", "HR", "Managerial"
+  status        String      @default("SCHEDULED") // "SCHEDULED", "COMPLETED", "CANCELLED"
+  feedback      String?
+  createdAt     DateTime    @default(now())
+
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("interviews")
+}
+
+model RecruiterNote {
+  id                 String           @id @default(uuid())
+  recruiterProfileId String
+  applicationId      String
+  noteText           String
+  createdAt          DateTime         @default(now())
+
+  recruiterProfile   RecruiterProfile @relation(fields: [recruiterProfileId], references: [id], onDelete: Cascade)
+  application        Application      @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("recruiter_notes")
+}
+
+// -------------------------------------------------------------
+// TALENT ALLOCATION (HUNGARIAN BIPARTITE MATCHING)
+// -------------------------------------------------------------
+model AssignmentRun {
+  id                 String             @id @default(uuid())
+  recruiterProfileId String
+  algorithmUsed      String             // "HUNGARIAN" or "MIN_COST_MAX_FLOW"
+  totalScore         Float
+  executionTimeMs    Float
+  createdAt          DateTime           @default(now())
+
+  recruiterProfile   RecruiterProfile   @relation(fields: [recruiterProfileId], references: [id], onDelete: Cascade)
+  results            AssignmentResult[]
+
+  @@map("assignment_runs")
+}
+
+model AssignmentResult {
+  id                 String           @id @default(uuid())
+  assignmentRunId    String
+  jobId              String
+  candidateProfileId String
+  matchScore         Float
+  supportingSkills   String           // JSON array or comma separated
+  isConfirmed        Boolean          @default(false)
+
+  assignmentRun      AssignmentRun    @relation(fields: [assignmentRunId], references: [id], onDelete: Cascade)
+  job                Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@map("assignment_results")
+}
+
+// -------------------------------------------------------------
+// TEAM FORMATION (GREEDY SET COVER APPROXIMATION)
+// -------------------------------------------------------------
+model TeamProject {
+  id                 String                     @id @default(uuid())
+  recruiterProfileId String
+  projectName        String
+  description        String
+  targetTeamSize     Int                        @default(4)
+  domain             String?
+  createdAt          DateTime                   @default(now())
+
+  recruiterProfile   RecruiterProfile           @relation(fields: [recruiterProfileId], references: [id], onDelete: Cascade)
+  requiredSkills     TeamProjectRequiredSkill[]
+  recommendations    TeamRecommendation[]
+
+  @@map("team_projects")
+}
+
+model TeamProjectRequiredSkill {
+  id            String      @id @default(uuid())
+  teamProjectId String
+  skillId       String
+
+  teamProject   TeamProject @relation(fields: [teamProjectId], references: [id], onDelete: Cascade)
+  skill         Skill       @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([teamProjectId, skillId])
+  @@map("team_project_required_skills")
+}
+
+model TeamRecommendation {
+  id                   String           @id @default(uuid())
+  teamProjectId        String
+  candidateProfileId   String
+  skillsContributed    String           // JSON string of skill names
+  selectionOrder       Int
+  createdAt            DateTime         @default(now())
+
+  teamProject          TeamProject      @relation(fields: [teamProjectId], references: [id], onDelete: Cascade)
+
+  @@map("team_recommendations")
+}
+
+// -------------------------------------------------------------
+// NOTIFICATIONS, AUDIT & DSA METRICS
+// -------------------------------------------------------------
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      String   // "APPLICATION", "STATUS_CHANGE", "INTERVIEW", "JOB_MATCH", "ADMIN"
+  isRead    Boolean  @default(false)
+  linkUrl   String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model Report {
+  id          String   @id @default(uuid())
+  reporterId  String
+  targetType  String   // "JOB", "USER"
+  targetId    String
+  reason      String
+  status      String   @default("PENDING") // "PENDING", "RESOLVED", "DISMISSED"
+  createdAt   DateTime @default(now())
+
+  @@map("reports")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  action      String   // e.g. "USER_LOGIN", "UPDATE_STATUS", "DELETE_JOB", "ALGORITHM_RUN"
+  targetModel String   // e.g. "Application", "Job", "User"
+  targetId    String?
+  metadataJson String? // Details of changes
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+}
+
+model AlgorithmMetric {
+  id              String   @id @default(uuid())
+  algorithmName   String   // "Aho-Corasick", "Levenshtein", "CompatibilityScoring", "HungarianMatching", "GreedySetCover"
+  executionTimeMs Float
+  inputSize       Int
+  itemCount       Int?
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  @@map("algorithm_metrics")
+}

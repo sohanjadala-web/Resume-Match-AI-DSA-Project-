@@ -1,0 +1,15 @@
+{
+  "name": "resumematch-ai",
+  "version": "1.0.0",
+  "description": "ResumeMatch AI - DSA-Powered Recruitment Platform",
+  "scripts": {
+    "server": "npm --prefix server run dev",
+    "client": "npm --prefix client run dev",
+    "seed": "npm --prefix server run db:seed",
+    "test": "npm --prefix server test",
+    "build": "npm --prefix server run build && npm --prefix client run build"
+  },
+  "keywords": ["dsa", "recruitment", "hungarian-algorithm", "set-cover", "aho-corasick", "levenshtein"],
+  "author": "",
+  "license": "ISC"
+}
